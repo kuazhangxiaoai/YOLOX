@@ -37,13 +37,13 @@ class Exp(BaseExp):
         # You can uncomment this line to specify a multiscale range
         # self.random_size = (14, 26)
         # dir of dataset images, if data_dir is None, this project will use `datasets` dir
-        self.data_dir = None
+        self.data_dir = "/home/yanggang/diskPoints/work2/COCO"
         # name of annotation file for training
-        self.train_ann = "instances_train2017.json"
+        self.train_ann = "instances_train2014.json"
         # name of annotation file for evaluation
-        self.val_ann = "instances_val2017.json"
+        self.val_ann = "instances_val2014.json"
         # name of annotation file for testing
-        self.test_ann = "instances_test2017.json"
+        self.test_ann = "instances_test2014.json"
 
         # --------------- transform config ----------------- #
         # prob of applying mosaic aug
@@ -282,7 +282,7 @@ class Exp(BaseExp):
         valdataset = COCODataset(
             data_dir=self.data_dir,
             json_file=self.val_ann if not testdev else self.test_ann,
-            name="val2017" if not testdev else "test2017",
+            name="val2014" if not testdev else "test2014",
             img_size=self.test_size,
             preproc=ValTransform(legacy=legacy),
         )

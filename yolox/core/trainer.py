@@ -32,7 +32,7 @@ from yolox.utils import (
 )
 
 
-class Trainer:
+class Trainer:    #This is one of core modules.
     def __init__(self, exp, args):
         # init function only defines some basic attr, other attrs like model, optimizer are built in
         # before_train methods.

@@ -30,19 +30,19 @@ def make_parser():
         type=str,
         help="url used to set up distributed training",
     )
-    parser.add_argument("-b", "--batch-size", type=int, default=64, help="batch size")
+    parser.add_argument("-b", "--batch-size", type=int, default=8, help="batch size")
     parser.add_argument(
-        "-d", "--devices", default=None, type=int, help="device for training"
+        "-d", "--devices", default=0, type=int, help="device for training"
     )
     parser.add_argument(
         "-f",
         "--exp_file",
-        default=None,
+        default='/home/yanggang/pyworks/code/YOLOX/exps/default/yolox_m.py',
         type=str,
         help="plz input your experiment description file",
     )
     parser.add_argument(
-        "--resume", default=False, action="store_true", help="resume training"
+        "--resume", default='/home/yanggang/pyworks/code/YOLOX/tools/YOLOX_outputs/yolox_m/latest_ckpt.pth', action="store_true", help="resume training"
     )
     parser.add_argument("-c", "--ckpt", default=None, type=str, help="checkpoint file")
     parser.add_argument(
