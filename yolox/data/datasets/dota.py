@@ -62,7 +62,6 @@ class DOTADataset(Dataset):
         return self.imgs_num
 
     def load_image(self, index):
-        print(self.imgs_file[index])
         return cv2.imread(self.imgs_file[index])
 
     def load_resized_img(self, index):
@@ -76,7 +75,9 @@ class DOTADataset(Dataset):
         return resized_img
 
     def pull_item(self, index):
+        id_ = self.ids[index]
         img = self.load_image(index)
+
         height, width = img.shape[0], img.shape[1]
         ann_file = self.labels_file[index]
         objects = dota_utils.parse_dota_poly2(ann_file)
@@ -84,9 +85,11 @@ class DOTADataset(Dataset):
         for obj in objects:
             class_id = self.class_id[obj['name']]
             poly     = obj['poly']
-            targets.append([class_id] + poly)
+            targets.append(poly+[class_id])
+        res = np.array(targets)
+        img_info = (height, width)
 
-        return None, None,None,None
+        return img, res.copy(), img_info, np.array([id_])
 
     def __getitem__(self, index):
         img, target, img_info, img_id = self.pull_item(index)
@@ -122,26 +125,11 @@ class DOTADataset(Dataset):
         im = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)
         return im, radio, (dw, dh)
 
-    def mixup(self, im, labels, im2, labels2):
-        r = np.random.beta(32.0, 32.0)
-        im = (im * r +im2 * (1-r)).astype(np.uint8)
-        labels = np.concatenate((labels, labels2), 0)
-        return im, labels
-
-
-
-
 
 
 
 if __name__ == '__main__':
-    dataset = DOTADataset(name='train', data_dir='/home/yanggang/diskPoints/work2/DOTA_SPLIT')
-    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=False)
-    img = np.zeros([800, 1224,3])
-    im, r, pad = dataset.letterbox(img)
-    cv2.imshow("img",im)
-    cv2.waitKey()
-    print(im, r, pad)
-    print("ending")
-    #for i, (img, target, img_info, img_id) in enumerate(dataloader):
-    #    print("reading one batch")
+    dataset = DOTADataset(name='train', data_dir='/home/yanggang/data/DOTA_SPLIT')
+    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=True,)
+    for i, (img, target, img_info, img_id) in enumerate(dataloader):
+        print("reading one batch")
