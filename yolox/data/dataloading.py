@@ -111,8 +111,9 @@ def worker_init_reset_seed(worker_id):
     torch.set_rng_state(torch.manual_seed(seed).get_state())
     np.random.seed(seed)
 
+@staticmethod
 def collate_fn(batch):
     img, label, img_info, img_id = zip(*batch)
-    for i, l in enumerate(label):
+    for i in range(label):
         l[:, 0] = i
     return torch.stack(img, 0), torch.cat(label, 0), img_info, img_id
