@@ -3,6 +3,7 @@
 # Copyright (c) Megvii, Inc. and its affiliates.
 
 import bisect
+import torch
 from functools import wraps
 
 from torch.utils.data.dataset import ConcatDataset as torchConcatDataset
@@ -112,3 +113,5 @@ class Dataset(torchDataset):
             return ret_val
 
         return wrapper
+
+
