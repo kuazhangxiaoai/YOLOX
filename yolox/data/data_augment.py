@@ -137,14 +137,14 @@ def random_cutout(img, targets, origin_size=(2048, 2048), target_size=(1024, 102
         targets[:, 7] = targets[:, 7] - start_x
         targets[:, 8] = targets[:, 8] - start_y
 
-    np.clip(targets[:, 1], 0, target_size[0], out=targets[:, 1])
-    np.clip(targets[:, 2], 0, target_size[1], out=targets[:, 2])
-    np.clip(targets[:, 3], 0, target_size[0], out=targets[:, 3])
-    np.clip(targets[:, 4], 0, target_size[1], out=targets[:, 4])
-    np.clip(targets[:, 5], 0, target_size[0], out=targets[:, 5])
-    np.clip(targets[:, 6], 0, target_size[1], out=targets[:, 6])
-    np.clip(targets[:, 7], 0, target_size[0], out=targets[:, 7])
-    np.clip(targets[:, 8], 0, target_size[1], out=targets[:, 8])
+        np.clip(targets[:, 1], 0, target_size[0], out=targets[:, 1])
+        np.clip(targets[:, 2], 0, target_size[1], out=targets[:, 2])
+        np.clip(targets[:, 3], 0, target_size[0], out=targets[:, 3])
+        np.clip(targets[:, 4], 0, target_size[1], out=targets[:, 4])
+        np.clip(targets[:, 5], 0, target_size[0], out=targets[:, 5])
+        np.clip(targets[:, 6], 0, target_size[1], out=targets[:, 6])
+        np.clip(targets[:, 7], 0, target_size[0], out=targets[:, 7])
+        np.clip(targets[:, 8], 0, target_size[1], out=targets[:, 8])
 
     return img, targets,(start_x, start_y)
 
