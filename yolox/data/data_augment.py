@@ -78,6 +78,17 @@ def get_affine_matrix(
 
     return M, scale
 
+def apply_affine_to_orientedbboxes(targets, target_size, M, scale):
+    num_gts = len(targets)
+    twidth, theight = target_size
+    corner_points = np.ones((4 * num_gts, 3))
+    corner_points[:,:2] = targets[:, 1:-1].reshape(4 * num_gts, 2) #x1y1, x2y2, x3y3,x4y4
+    corner_points = corner_points @ M.T
+    corner_points = corner_points.reshape(num_gts, 8)
+    corner_points[:, 0::2] = corner_points[:, 0::2].clip(0, twidth)
+    corner_points[:, 1::2] = corner_points[:, 1::2].clip(0, theight)
+    targets[:, 1: -1] = corner_points
+    return targets
 
 def apply_affine_to_bboxes(targets, target_size, M, scale):
     num_gts = len(targets)
@@ -110,6 +121,32 @@ def apply_affine_to_bboxes(targets, target_size, M, scale):
 
     return targets
 
+def random_cutout(img, targets, origin_size=(2048, 2048), target_size=(1024, 1024)):
+    assert origin_size[0] > target_size[0]
+    assert origin_size[1] > target_size[1]
+    start_x = random.randint(0, origin_size[0] - target_size[0])
+    start_y = random.randint(0, origin_size[1] - origin_size[1])
+    img = img[start_x : start_x + target_size[0], start_y : start_y + target_size[1], :]
+    if targets.size > 0:
+        targets[:, 1] = targets[:, 1] - start_x
+        targets[:, 2] = targets[:, 2] - start_y
+        targets[:, 3] = targets[:, 3] - start_x
+        targets[:, 4] = targets[:, 4] - start_y
+        targets[:, 5] = targets[:, 5] - start_x
+        targets[:, 6] = targets[:, 6] - start_y
+        targets[:, 7] = targets[:, 7] - start_x
+        targets[:, 8] = targets[:, 8] - start_y
+
+    np.clip(targets[:, 1], 0, target_size[0], out=targets[:, 1])
+    np.clip(targets[:, 2], 0, target_size[1], out=targets[:, 2])
+    np.clip(targets[:, 3], 0, target_size[0], out=targets[:, 3])
+    np.clip(targets[:, 4], 0, target_size[1], out=targets[:, 4])
+    np.clip(targets[:, 5], 0, target_size[0], out=targets[:, 5])
+    np.clip(targets[:, 6], 0, target_size[1], out=targets[:, 6])
+    np.clip(targets[:, 7], 0, target_size[0], out=targets[:, 7])
+    np.clip(targets[:, 8], 0, target_size[1], out=targets[:, 8])
+
+    return img, targets,(start_x, start_y)
 
 def random_affine(
     img,
@@ -119,14 +156,17 @@ def random_affine(
     translate=0.1,
     scales=0.1,
     shear=10,
+    oriented=False
 ):
     M, scale = get_affine_matrix(target_size, degrees, translate, scales, shear)
 
     img = cv2.warpAffine(img, M, dsize=target_size, borderValue=(114, 114, 114))
 
     # Transform label coordinates
-    if len(targets) > 0:
+    if len(targets) and (oriented is False) > 0:
         targets = apply_affine_to_bboxes(targets, target_size, M, scale)
+    elif len(targets) and (oriented):
+        targets = apply_affine_to_orientedbboxes(targets, target_size, M, scale)
 
     return img, targets
 
@@ -209,8 +249,90 @@ class TrainTransform:
         padded_labels = np.ascontiguousarray(padded_labels, dtype=np.float32)
         return image_t, padded_labels
 
+class OrientedTrainTransform:
+    def __init__(self, max_labels=50, flip_prob=0.5, hsv_prob=1.0):
+        self.max_labels = max_labels
+        self.flip_prob = flip_prob
+        self.hsv_prob = hsv_prob
+
+    def __call__(self, image, targets, input_dim):
+        boxes = targets[:, :4].copy()
+        labels = targets[:, 4].copy()
+        if len(boxes) == 0:
+            targets = np.zeros((self.max_labels, 5), dtype=np.float32)
+            image, r_o = preproc(image, input_dim)
+            return image, targets
+
+        image_o = image.copy()
+        targets_o = targets.copy()
+        height_o, width_o, _ = image_o.shape
+        boxes_o = targets_o[:, :4]
+        labels_o = targets_o[:, 4]
+        # bbox_o: [xyxy] to [c_x,c_y,w,h]
+        boxes_o = xyxy2cxcywh(boxes_o)
+
+        if random.random() < self.hsv_prob:
+            augment_hsv(image)
+        image_t, boxes = _mirror(image, boxes, self.flip_prob)
+        height, width, _ = image_t.shape
+        image_t, r_ = preproc(image_t, input_dim)
+        # boxes [xyxy] 2 [cx,cy,w,h]
+        boxes = xyxy2cxcywh(boxes)
+        boxes *= r_
+
+        mask_b = np.minimum(boxes[:, 2], boxes[:, 3]) > 1
+        boxes_t = boxes[mask_b]
+        labels_t = labels[mask_b]
+
+        if len(boxes_t) == 0:
+            image_t, r_o = preproc(image_o, input_dim)
+            boxes_o *= r_o
+            boxes_t = boxes_o
+            labels_t = labels_o
+
+        labels_t = np.expand_dims(labels_t, 1)
+
+        targets_t = np.hstack((labels_t, boxes_t))
+        padded_labels = np.zeros((self.max_labels, 5))
+        padded_labels[range(len(targets_t))[: self.max_labels]] = targets_t[
+            : self.max_labels
+        ]
+        padded_labels = np.ascontiguousarray(padded_labels, dtype=np.float32)
+        return image_t, padded_labels
 
 class ValTransform:
+    """
+    Defines the transformations that should be applied to test PIL image
+    for input into the network
+
+    dimension -> tensorize -> color adj
+
+    Arguments:
+        resize (int): input dimension to SSD
+        rgb_means ((int,int,int)): average RGB of the dataset
+            (104,117,123)
+        swap ((int,int,int)): final order of channels
+
+    Returns:
+        transform (transform) : callable transform to be applied to test/val
+        data
+    """
+
+    def __init__(self, swap=(2, 0, 1), legacy=False):
+        self.swap = swap
+        self.legacy = legacy
+
+    # assume input is cv2 img for now
+    def __call__(self, img, res, input_size):
+        img, _ = preproc(img, input_size, self.swap)
+        if self.legacy:
+            img = img[::-1, :, :].copy()
+            img /= 255.0
+            img -= np.array([0.485, 0.456, 0.406]).reshape(3, 1, 1)
+            img /= np.array([0.229, 0.224, 0.225]).reshape(3, 1, 1)
+        return img, np.zeros((1, 5))
+
+class OrientedValTransform:
     """
     Defines the transformations that should be applied to test PIL image
     for input into the network

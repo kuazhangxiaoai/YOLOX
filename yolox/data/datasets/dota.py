@@ -32,6 +32,13 @@ dotav15_classes = ['plane', 'baseball-diamond', 'bridge', 'ground-track-field', 
                 'soccer-ball-field', 'roundabout', 'harbor', 'swimming-pool', 'helicopter',
                 'container-crane']
 
+def collate_fn(batch):
+    img, label, img_info, img_id = zip(*batch)
+
+    for i, l in enumerate(label):
+        l[:, 0] = i
+    return np.array(img), np.vstack(label), np.vstack(img_info), img_id
+
 class DOTADataset(Dataset):
     def __init__(self, name="train", data_dir=None, img_size=(1024, 1024), preproc=None, cache=False, save_result_dir=None):
         super().__init__(img_size)
@@ -85,10 +92,11 @@ class DOTADataset(Dataset):
         for obj in objects:
             class_id = self.class_id[obj['name']]
             poly     = obj['poly']
-            targets.append(poly+[class_id])
+            targets.append([0] + poly + [class_id])
         res = np.array(targets)
-        img_info = (height, width)
+        img_info = np.array([height, width])
 
+        #self.draw(img, res)
         return img, res.copy(), img_info, np.array([id_])
 
     def __getitem__(self, index):
@@ -124,12 +132,25 @@ class DOTADataset(Dataset):
 
         im = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)
         return im, radio, (dw, dh)
+"""
+    def draw(self, img, label, savepath=False):
+        pts = label[:, 1: -1]
+        for i, poly in enumerate(pts):
+            poly = poly.reshape([4,2]).astype(np.int32)
+            cv2.polylines(img, [poly], isClosed=True, color=(0,0,255), thickness=2)
+
+        if savepath :
+            cv2.imwrite(save, img)
+        else:
+            cv2.imshow("image", img)
+            cv2.waitKey()
 
 
 
 
 if __name__ == '__main__':
     dataset = DOTADataset(name='train', data_dir='/home/yanggang/data/DOTA_SPLIT')
-    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=True,)
+    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=4, shuffle=False,collate_fn=collate_fn)
     for i, (img, target, img_info, img_id) in enumerate(dataloader):
         print("reading one batch")
+"""

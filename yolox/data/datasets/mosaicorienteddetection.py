@@ -8,9 +8,10 @@ import cv2
 import numpy as np
 
 from yolox.utils import adjust_box_anns, get_local_rank
-
-from ..data_augment import random_affine
-from .datasets_wrapper import Dataset
+from yolox.data.data_augment import random_affine,random_cutout
+from yolox.data.datasets.datasets_wrapper import Dataset
+#from ..data_augment import random_affine
+#from .datasets_wrapper import Dataset
 
 
 def get_mosaic_coordinate(mosaic_image, mosaic_index, xc, yc, w, h, input_h, input_w):
@@ -41,7 +42,8 @@ class MosaicOrientedDetection(Dataset):
         self, dataset, img_size, mosaic=True, preproc=None,
         degrees=10.0, translate=0.1, mosaic_scale=(0.5, 1.5),
         mixup_scale=(0.5, 1.5), shear=2.0, enable_mixup=True,
-        mosaic_prob=1.0, mixup_prob=1.0, *args
+        mosaic_prob=1.0, mixup_prob=1.0, random_affine_enable=False,
+        random_cutout_enable=True, *args
     ):
         """
 
@@ -70,6 +72,8 @@ class MosaicOrientedDetection(Dataset):
         self.enable_mixup = enable_mixup
         self.mosaic_prob = mosaic_prob
         self.mixup_prob = mixup_prob
+        self.random_affine_enable = random_affine_enable
+        self.random_cutout_enable = random_cutout_enable
         self.local_rank = get_local_rank()
 
     def __len__(self):
@@ -112,28 +116,45 @@ class MosaicOrientedDetection(Dataset):
                 labels = _labels.copy()
                 # Normalized xywh to pixel xyxy format
                 if _labels.size > 0:
-                    labels[:, 0] = scale * _labels[:, 0] + padw
-                    labels[:, 1] = scale * _labels[:, 1] + padh
-                    labels[:, 2] = scale * _labels[:, 2] + padw
-                    labels[:, 3] = scale * _labels[:, 3] + padh
+                    labels[:, 1] = scale * _labels[:, 1] + padw
+                    labels[:, 2] = scale * _labels[:, 2] + padh
+                    labels[:, 3] = scale * _labels[:, 3] + padw
+                    labels[:, 4] = scale * _labels[:, 4] + padh
+                    labels[:, 5] = scale * _labels[:, 5] + padw
+                    labels[:, 6] = scale * _labels[:, 6] + padh
+                    labels[:, 7] = scale * _labels[:, 7] + padw
+                    labels[:, 8] = scale * _labels[:, 8] + padh
                 mosaic_labels.append(labels)
 
             if len(mosaic_labels):
                 mosaic_labels = np.concatenate(mosaic_labels, 0)
-                np.clip(mosaic_labels[:, 0], 0, 2 * input_w, out=mosaic_labels[:, 0])
-                np.clip(mosaic_labels[:, 1], 0, 2 * input_h, out=mosaic_labels[:, 1])
-                np.clip(mosaic_labels[:, 2], 0, 2 * input_w, out=mosaic_labels[:, 2])
-                np.clip(mosaic_labels[:, 3], 0, 2 * input_h, out=mosaic_labels[:, 3])
+                np.clip(mosaic_labels[:, 1], 0, 2 * input_w, out=mosaic_labels[:, 1])
+                np.clip(mosaic_labels[:, 2], 0, 2 * input_h, out=mosaic_labels[:, 2])
+                np.clip(mosaic_labels[:, 3], 0, 2 * input_w, out=mosaic_labels[:, 3])
+                np.clip(mosaic_labels[:, 4], 0, 2 * input_h, out=mosaic_labels[:, 4])
+                np.clip(mosaic_labels[:, 5], 0, 2 * input_w, out=mosaic_labels[:, 5])
+                np.clip(mosaic_labels[:, 6], 0, 2 * input_h, out=mosaic_labels[:, 6])
+                np.clip(mosaic_labels[:, 7], 0, 2 * input_w, out=mosaic_labels[:, 7])
+                np.clip(mosaic_labels[:, 8], 0, 2 * input_h, out=mosaic_labels[:, 8])
 
-            mosaic_img, mosaic_labels = random_affine(
-                mosaic_img,
-                mosaic_labels,
-                target_size=(input_w, input_h),
-                degrees=self.degrees,
-                translate=self.translate,
-                scales=self.scale,
-                shear=self.shear,
-            )
+            if self.random_affine_enable:
+                mosaic_img, mosaic_labels = random_affine(
+                    mosaic_img,
+                    mosaic_labels,
+                    target_size=(2 * input_w, 2 * input_h),
+                    degrees=self.degrees,
+                    translate=self.translate,
+                    scales=self.scale,
+                    shear=self.shear,
+                    oriented=True
+                )
+            elif self.random_cutout_enable:
+                mosaic_img, mosaic_labels, _ = random_cutout(
+                    mosaic_img,
+                    mosaic_labels,
+                    origin_size=(2 * input_w,  2 * input_h),
+                    target_size=(input_w, input_h)
+                )
 
             # -----------------------------------------------------------------
             # CopyPaste: https://arxiv.org/abs/2012.07177
@@ -232,3 +253,18 @@ class MosaicOrientedDetection(Dataset):
         origin_img = 0.5 * origin_img + 0.5 * padded_cropped_img.astype(np.float32)
 
         return origin_img.astype(np.uint8), origin_labels
+
+if __name__ == "__main__":
+    from dota import DOTADataset,collate_fn
+    from yolox.data.data_augment import OrientedValTransform, OrientedTrainTransform
+    import torch
+    dataset = DOTADataset(name='train', data_dir='/home/yanggang/data/DOTA_SPLIT')
+    dataset = MosaicOrientedDetection(dataset,
+                                      img_size=(1024, 1024),
+                                      mosaic=True,
+                                      preproc=OrientedTrainTransform())
+
+    dataloader = dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=4, shuffle=False,collate_fn=collate_fn)
+
+    for i, (img, label, img_info, img_id) in enumerate(dataloader):
+        print("one batch")
