@@ -121,11 +121,15 @@ def apply_affine_to_bboxes(targets, target_size, M, scale):
 
     return targets
 
-def random_cutout(img, targets, origin_size=(2048, 2048), target_size=(1024, 1024)):
+def random_cutout(img, targets, xc, yc,origin_size=(2048, 2048), target_size=(1024, 1024), scope=0.3):
     assert origin_size[0] > target_size[0]
     assert origin_size[1] > target_size[1]
-    start_x = random.randint(0, origin_size[0] - target_size[0])
-    start_y = random.randint(0, origin_size[1] - origin_size[1])
+    x_min, y_min = max(0, xc - target_size[0]), max(0, yc - target_size[1])
+    x_max, y_max = min(xc, target_size[0]), min(yc, target_size[1])
+    x_min, y_min = int(x_min + scope * (x_max - x_min)), int(y_min + scope * (y_max - y_min))
+    x_max, y_max = int(x_max - scope * (x_max - x_min)), int(y_max - scope * (y_max - y_min))
+    start_x = random.randint(x_min, x_max)
+    start_y = random.randint(y_min, y_max)
     img = img[start_x : start_x + target_size[0], start_y : start_y + target_size[1], :]
     if targets.size > 0:
         targets[:, 1] = targets[:, 1] - start_x
@@ -136,6 +140,11 @@ def random_cutout(img, targets, origin_size=(2048, 2048), target_size=(1024, 102
         targets[:, 6] = targets[:, 6] - start_y
         targets[:, 7] = targets[:, 7] - start_x
         targets[:, 8] = targets[:, 8] - start_y
+
+        center_x = 0.25 * (targets[:, 1] + targets[:, 3] + targets[:, 5] + targets[:, 7])
+        center_y = 0.25 * (targets[:, 2] + targets[:, 4] + targets[:, 6] + targets[:, 8])
+
+        targets = targets[(center_x > 0) * (center_x < target_size[0]) * (center_y > 0) * (center_y < target_size[1])]
 
         np.clip(targets[:, 1], 0, target_size[0], out=targets[:, 1])
         np.clip(targets[:, 2], 0, target_size[1], out=targets[:, 2])

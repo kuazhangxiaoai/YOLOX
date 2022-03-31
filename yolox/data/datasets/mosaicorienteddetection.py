@@ -148,12 +148,17 @@ class MosaicOrientedDetection(Dataset):
                     shear=self.shear,
                     oriented=True
                 )
-            elif self.random_cutout_enable:
+
+
+            if self.random_cutout_enable:
                 mosaic_img, mosaic_labels, _ = random_cutout(
                     mosaic_img,
                     mosaic_labels,
+                    xc=xc,
+                    yc=yc,
                     origin_size=(2 * input_w,  2 * input_h),
-                    target_size=(input_w, input_h)
+                    target_size=(input_w, input_h),
+                    scope=0.0
                 )
 
             # -----------------------------------------------------------------
@@ -264,7 +269,7 @@ if __name__ == "__main__":
                                       mosaic=True,
                                       preproc=OrientedTrainTransform())
 
-    dataloader = dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=4, shuffle=False,collate_fn=collate_fn)
+    dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=4, shuffle=False,collate_fn=collate_fn)
 
     for i, (img, label, img_info, img_id) in enumerate(dataloader):
         print("one batch")

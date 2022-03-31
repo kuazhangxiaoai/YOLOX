@@ -81,6 +81,16 @@ class DOTADataset(Dataset):
         ).astype(np.uint8)
         return resized_img
 
+    def load_anno(self, index):
+        ann_file = self.labels_file[index]
+        objects = dota_utils.parse_dota_poly2(ann_file)
+        targets = []
+        for obj in objects:
+            class_id = self.class_id[obj['name']]
+            poly     = obj['poly']
+            targets.append([0] + poly + [class_id])
+        return np.array([targets])
+
     def pull_item(self, index):
         id_ = self.ids[index]
         img = self.load_image(index)
