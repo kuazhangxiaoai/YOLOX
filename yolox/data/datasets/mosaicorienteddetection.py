@@ -10,6 +10,7 @@ import numpy as np
 from yolox.utils import adjust_box_anns, get_local_rank
 from yolox.data.data_augment import random_affine,random_cutout
 from yolox.data.datasets.datasets_wrapper import Dataset
+from dota import DOTADataset,collate_fn,draw
 #from ..data_augment import random_affine
 #from .datasets_wrapper import Dataset
 
@@ -128,14 +129,6 @@ class MosaicOrientedDetection(Dataset):
 
             if len(mosaic_labels):
                 mosaic_labels = np.concatenate(mosaic_labels, 0)
-                np.clip(mosaic_labels[:, 1], 0, 2 * input_w, out=mosaic_labels[:, 1])
-                np.clip(mosaic_labels[:, 2], 0, 2 * input_h, out=mosaic_labels[:, 2])
-                np.clip(mosaic_labels[:, 3], 0, 2 * input_w, out=mosaic_labels[:, 3])
-                np.clip(mosaic_labels[:, 4], 0, 2 * input_h, out=mosaic_labels[:, 4])
-                np.clip(mosaic_labels[:, 5], 0, 2 * input_w, out=mosaic_labels[:, 5])
-                np.clip(mosaic_labels[:, 6], 0, 2 * input_h, out=mosaic_labels[:, 6])
-                np.clip(mosaic_labels[:, 7], 0, 2 * input_w, out=mosaic_labels[:, 7])
-                np.clip(mosaic_labels[:, 8], 0, 2 * input_h, out=mosaic_labels[:, 8])
 
             if self.random_affine_enable:
                 mosaic_img, mosaic_labels = random_affine(
@@ -186,81 +179,34 @@ class MosaicOrientedDetection(Dataset):
             return img, label, img_info, img_id
 
     def mixup(self, origin_img, origin_labels, input_dim):
-        jit_factor = random.uniform(*self.mixup_scale)
-        FLIP = random.uniform(0, 1) > 0.5
-        cp_labels = []
-        while len(cp_labels) == 0:
-            cp_index = random.randint(0, self.__len__() - 1)
-            cp_labels = self._dataset.load_anno(cp_index)
-        img, cp_labels, _, _ = self._dataset.pull_item(cp_index)
+        r = np.random.beta(32.0, 32.0)
+        HFLIP = random.uniform(0, 1) > 0.5
+        VFLIP = random.uniform(0, 1) > 0.5
+        cp_index = random.randint(0, self.__len__() - 1)
+        cp_img, cp_labels, _, _ = self._dataset.pull_item(cp_index)
+        if cp_img.shape != origin_img.shape:
+            cp_img, scale, (padw, padh) = self._dataset.letterbox(cp_img)
+            cp_labels[:, 1:-1:2] = scale[1] * cp_labels[:, 1:-1:2]
+            cp_labels[:, 2:-1:2] = scale[0] * cp_labels[:, 2:-1:2]
+            cp_labels[:, 1:-1:2] += int(padw)
+            cp_labels[:, 2:-1:2] += int(padh)
 
-        if len(img.shape) == 3:
-            cp_img = np.ones((input_dim[0], input_dim[1], 3), dtype=np.uint8) * 114
-        else:
-            cp_img = np.ones(input_dim, dtype=np.uint8) * 114
+        width, height = cp_img.shape[0], cp_img.shape[1]
 
-        cp_scale_ratio = min(input_dim[0] / img.shape[0], input_dim[1] / img.shape[1])
-        resized_img = cv2.resize(
-            img,
-            (int(img.shape[1] * cp_scale_ratio), int(img.shape[0] * cp_scale_ratio)),
-            interpolation=cv2.INTER_LINEAR,
-        )
-
-        cp_img[
-            : int(img.shape[0] * cp_scale_ratio), : int(img.shape[1] * cp_scale_ratio)
-        ] = resized_img
-
-        cp_img = cv2.resize(
-            cp_img,
-            (int(cp_img.shape[1] * jit_factor), int(cp_img.shape[0] * jit_factor)),
-        )
-        cp_scale_ratio *= jit_factor
-
-        if FLIP:
+        if HFLIP:
             cp_img = cp_img[:, ::-1, :]
+            cp_labels[:, 1:-1:2] = width - cp_labels[:, 1:-1:2]
+        if VFLIP:
+            cp_img = cp_img[::-1, :, :]
+            cp_labels[:, 2:-1:2] = height - cp_labels[:, 2:-1:2]
 
-        origin_h, origin_w = cp_img.shape[:2]
-        target_h, target_w = origin_img.shape[:2]
-        padded_img = np.zeros(
-            (max(origin_h, target_h), max(origin_w, target_w), 3), dtype=np.uint8
-        )
-        padded_img[:origin_h, :origin_w] = cp_img
-
-        x_offset, y_offset = 0, 0
-        if padded_img.shape[0] > target_h:
-            y_offset = random.randint(0, padded_img.shape[0] - target_h - 1)
-        if padded_img.shape[1] > target_w:
-            x_offset = random.randint(0, padded_img.shape[1] - target_w - 1)
-        padded_cropped_img = padded_img[
-            y_offset: y_offset + target_h, x_offset: x_offset + target_w
-        ]
-
-        cp_bboxes_origin_np = adjust_box_anns(
-            cp_labels[:, :4].copy(), cp_scale_ratio, 0, 0, origin_w, origin_h
-        )
-        if FLIP:
-            cp_bboxes_origin_np[:, 0::2] = (
-                origin_w - cp_bboxes_origin_np[:, 0::2][:, ::-1]
-            )
-        cp_bboxes_transformed_np = cp_bboxes_origin_np.copy()
-        cp_bboxes_transformed_np[:, 0::2] = np.clip(
-            cp_bboxes_transformed_np[:, 0::2] - x_offset, 0, target_w
-        )
-        cp_bboxes_transformed_np[:, 1::2] = np.clip(
-            cp_bboxes_transformed_np[:, 1::2] - y_offset, 0, target_h
-        )
-
-        cls_labels = cp_labels[:, 4:5].copy()
-        box_labels = cp_bboxes_transformed_np
-        labels = np.hstack((box_labels, cls_labels))
-        origin_labels = np.vstack((origin_labels, labels))
-        origin_img = origin_img.astype(np.float32)
-        origin_img = 0.5 * origin_img + 0.5 * padded_cropped_img.astype(np.float32)
-
-        return origin_img.astype(np.uint8), origin_labels
+        img = (origin_img * r + (1 - r) * cp_img).astype(np.uint8)
+        labels = np.concatenate((origin_labels, cp_labels), 0)
+        draw(img, labels, origin_img, origin_labels,cp_img, cp_labels)
+        return img, labels
 
 if __name__ == "__main__":
-    from dota import DOTADataset,collate_fn
+
     from yolox.data.data_augment import OrientedValTransform, OrientedTrainTransform
     import torch
     dataset = DOTADataset(name='train', data_dir='/home/yanggang/data/DOTA_SPLIT')

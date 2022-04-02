@@ -39,6 +39,33 @@ def collate_fn(batch):
         l[:, 0] = i
     return np.array(img), np.vstack(label), np.vstack(img_info), img_id
 
+def draw(img, label, img1, label1, img2, label2, savepath=False, windowName='image'):
+    pts = label[:, 1: -1]
+    for i, poly in enumerate(pts):
+        poly = poly.reshape([4, 2]).astype(np.int32)
+        cv2.polylines(img, [poly], isClosed=True, color=(0, 0, 255), thickness=2)
+
+    pts1 = label1[:, 1: -1]
+    for i, poly in enumerate(pts1):
+        poly = poly.reshape([4, 2]).astype(np.int32)
+        cv2.polylines(img1, [poly], isClosed=True, color=(0, 0, 255), thickness=2)
+
+    pts2 = label2[:, 1: -1]
+    for i, poly in enumerate(pts2):
+        poly = poly.reshape([4, 2]).astype(np.int32)
+        cv2.polylines(img2, [poly], isClosed=True, color=(0, 0, 255), thickness=2)
+
+    if savepath:
+        cv2.imwrite(savepath, img)
+    else:
+        cv2.namedWindow("img",  0)
+        cv2.namedWindow("img1", 0)
+        cv2.namedWindow("img2", 0)
+        cv2.imshow("img", img)
+        cv2.imshow("img1", img1)
+        cv2.imshow("img2", img2)
+        cv2.waitKey()
+
 class DOTADataset(Dataset):
     def __init__(self, name="train", data_dir=None, img_size=(1024, 1024), preproc=None, cache=False, save_result_dir=None):
         super().__init__(img_size)
@@ -143,17 +170,7 @@ class DOTADataset(Dataset):
         im = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)
         return im, radio, (dw, dh)
 """
-    def draw(self, img, label, savepath=False):
-        pts = label[:, 1: -1]
-        for i, poly in enumerate(pts):
-            poly = poly.reshape([4,2]).astype(np.int32)
-            cv2.polylines(img, [poly], isClosed=True, color=(0,0,255), thickness=2)
-
-        if savepath :
-            cv2.imwrite(save, img)
-        else:
-            cv2.imshow("image", img)
-            cv2.waitKey()
+    
 
 
 
