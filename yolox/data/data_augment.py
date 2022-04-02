@@ -27,8 +27,8 @@ def augment_hsv(img, hgain=5, sgain=30, vgain=30):
     img_hsv[..., 0] = (img_hsv[..., 0] + hsv_augs[0]) % 180
     img_hsv[..., 1] = np.clip(img_hsv[..., 1] + hsv_augs[1], 0, 255)
     img_hsv[..., 2] = np.clip(img_hsv[..., 2] + hsv_augs[2], 0, 255)
-
-    cv2.cvtColor(img_hsv.astype(img.dtype), cv2.COLOR_HSV2BGR, dst=img)  # no return needed
+    # no return needed
+    return cv2.cvtColor(img_hsv.astype(img.dtype), code=cv2.COLOR_HSV2BGR)
 
 
 def get_aug_params(value, center=0):
@@ -180,11 +180,11 @@ def random_affine(
     return img, targets
 
 
-def _mirror(image, boxes, prob=0.5):
+def _mirror(image, boxes, prob=0.5): #the format of boexes must be xyxy
     _, width, _ = image.shape
     if random.random() < prob:
         image = image[:, ::-1]
-        boxes[:, 0::2] = width - boxes[:, 2::-2]
+        boxes[:, 0::2] = width - boxes[:, 0::2]
     return image, boxes
 
 
@@ -259,55 +259,33 @@ class TrainTransform:
         return image_t, padded_labels
 
 class OrientedTrainTransform:
-    def __init__(self, max_labels=50, flip_prob=0.5, hsv_prob=1.0):
-        self.max_labels = max_labels
+    def __init__(self, flip_prob=0.5, hsv_prob=1.0):
         self.flip_prob = flip_prob
         self.hsv_prob = hsv_prob
 
     def __call__(self, image, targets, input_dim):
         boxes = targets[:, 1:-1].copy()
         labels = targets[:, -1].copy()
-        if len(boxes) == 0:
-            targets = np.zeros((self.max_labels, 5), dtype=np.float32)
-            image, r_o = preproc(image, input_dim)
-            return image, targets
+        image, boxes = _mirror(image, boxes)
 
         image_o = image.copy()
-        targets_o = targets.copy()
         height_o, width_o, _ = image_o.shape
-        boxes_o = targets_o[:, 1:-1]
-        labels_o = targets_o[:, -1]
-        # bbox_o: [xyxy] to [c_x, c_y, w, h, alpha, beta]
-        boxes_o = xyxy2cxcywhab(boxes_o)
 
         if random.random() < self.hsv_prob:
-            augment_hsv(image)
-        image_t, boxes = _mirror(image, boxes, self.flip_prob)
-        height, width, _ = image_t.shape
-        image_t, r_ = preproc(image_t, input_dim)
-        # boxes [xyxy] 2 [cx,cy,w,h]
-        boxes = xyxy2cxcywh(boxes)
-        boxes *= r_
+            image = augment_hsv(image)
+        height, width, _ = image.shape
+
+        # bbox_o: [xyxy] to [c_x, c_y, w, h, alpha, beta]
+        boxes = xyxy2cxcywhab(boxes)
 
         mask_b = np.minimum(boxes[:, 2], boxes[:, 3]) > 1
         boxes_t = boxes[mask_b]
         labels_t = labels[mask_b]
-
-        if len(boxes_t) == 0:
-            image_t, r_o = preproc(image_o, input_dim)
-            boxes_o *= r_o
-            boxes_t = boxes_o
-            labels_t = labels_o
-
         labels_t = np.expand_dims(labels_t, 1)
 
-        targets_t = np.hstack((labels_t, boxes_t))
-        padded_labels = np.zeros((self.max_labels, 5))
-        padded_labels[range(len(targets_t))[: self.max_labels]] = targets_t[
-            : self.max_labels
-        ]
-        padded_labels = np.ascontiguousarray(padded_labels, dtype=np.float32)
-        return image_t, padded_labels
+        targets_t = np.hstack((boxes_t, labels_t))
+
+        return image, targets_t
 
 class ValTransform:
     """

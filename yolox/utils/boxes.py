@@ -146,6 +146,5 @@ def xyxy2cxcywhab(bboxes):
     y_min_index, y_max_index = np.argmin(ys, axis=1), np.argmax(ys, axis=1)
     alpha = xs[np.arange(boxes_num),y_min_index] - x_min
     beta  = y_max - ys[np.arange(boxes_num),x_max_index]
-    results = np.concatenate([cx, cy, w, h, alpha, beta],axis=1)
-    return results
+    return np.transpose(np.vstack([cx, cy, w, h, alpha, beta]))
 
