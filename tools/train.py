@@ -37,12 +37,12 @@ def make_parser():
     parser.add_argument(
         "-f",
         "--exp_file",
-        default='/home/yanggang/pyworks/code/YOLOX/exps/default/yolox_m.py',
+        default='/home/yanggang/PyCharmWorkspace/YOLOX/exps/default/yolox_m.py',
         type=str,
         help="plz input your experiment description file",
     )
     parser.add_argument(
-        "--resume", default='/home/yanggang/pyworks/code/YOLOX/tools/YOLOX_outputs/yolox_m/latest_ckpt.pth', action="store_true", help="resume training"
+        "--resume", action="store_true", help="resume training"
     )
     parser.add_argument("-c", "--ckpt", default=None, type=str, help="checkpoint file")
     parser.add_argument(
