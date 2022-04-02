@@ -15,7 +15,7 @@ import random
 import cv2
 import numpy as np
 
-from yolox.utils import xyxy2cxcywh
+from yolox.utils import xyxy2cxcywh, xyxy2cxcywhab
 
 
 def augment_hsv(img, hgain=5, sgain=30, vgain=30):
@@ -265,8 +265,8 @@ class OrientedTrainTransform:
         self.hsv_prob = hsv_prob
 
     def __call__(self, image, targets, input_dim):
-        boxes = targets[:, :4].copy()
-        labels = targets[:, 4].copy()
+        boxes = targets[:, 1:-1].copy()
+        labels = targets[:, -1].copy()
         if len(boxes) == 0:
             targets = np.zeros((self.max_labels, 5), dtype=np.float32)
             image, r_o = preproc(image, input_dim)
@@ -275,10 +275,10 @@ class OrientedTrainTransform:
         image_o = image.copy()
         targets_o = targets.copy()
         height_o, width_o, _ = image_o.shape
-        boxes_o = targets_o[:, :4]
-        labels_o = targets_o[:, 4]
-        # bbox_o: [xyxy] to [c_x,c_y,w,h]
-        boxes_o = xyxy2cxcywh(boxes_o)
+        boxes_o = targets_o[:, 1:-1]
+        labels_o = targets_o[:, -1]
+        # bbox_o: [xyxy] to [c_x, c_y, w, h, alpha, beta]
+        boxes_o = xyxy2cxcywhab(boxes_o)
 
         if random.random() < self.hsv_prob:
             augment_hsv(image)

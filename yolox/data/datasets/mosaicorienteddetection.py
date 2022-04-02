@@ -10,7 +10,7 @@ import numpy as np
 from yolox.utils import adjust_box_anns, get_local_rank
 from yolox.data.data_augment import random_affine,random_cutout
 from yolox.data.datasets.datasets_wrapper import Dataset
-from dota import DOTADataset,collate_fn,draw
+from dota import DOTADataset,collate_fn,draw,drawOneImg
 #from ..data_augment import random_affine
 #from .datasets_wrapper import Dataset
 
@@ -190,7 +190,7 @@ class MosaicOrientedDetection(Dataset):
             cp_labels[:, 2:-1:2] = scale[0] * cp_labels[:, 2:-1:2]
             cp_labels[:, 1:-1:2] += int(padw)
             cp_labels[:, 2:-1:2] += int(padh)
-
+            drawOneImg(cp_img, cp_labels)
         width, height = cp_img.shape[0], cp_img.shape[1]
 
         if HFLIP:
@@ -202,8 +202,9 @@ class MosaicOrientedDetection(Dataset):
 
         img = (origin_img * r + (1 - r) * cp_img).astype(np.uint8)
         labels = np.concatenate((origin_labels, cp_labels), 0)
-        draw(img, labels, origin_img, origin_labels,cp_img, cp_labels)
+        #draw(img, labels, origin_img, origin_labels,cp_img, cp_labels)
         return img, labels
+
 
 if __name__ == "__main__":
 

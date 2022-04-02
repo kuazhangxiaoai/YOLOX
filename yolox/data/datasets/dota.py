@@ -66,6 +66,19 @@ def draw(img, label, img1, label1, img2, label2, savepath=False, windowName='ima
         cv2.imshow("img2", img2)
         cv2.waitKey()
 
+def drawOneImg(img, label, savepath=False, windowName='image'):
+    pts = label[:, 1: -1]
+    for i, poly in enumerate(pts):
+        poly = poly.reshape([4, 2]).astype(np.int32)
+        cv2.polylines(img, [poly], isClosed=True, color=(0, 0, 255), thickness=2)
+
+    if savepath:
+        cv2.imwrite(savepath, img)
+    else:
+        cv2.namedWindow("img",  0)
+        cv2.imshow("img", img)
+        cv2.waitKey()
+
 class DOTADataset(Dataset):
     def __init__(self, name="train", data_dir=None, img_size=(1024, 1024), preproc=None, cache=False, save_result_dir=None):
         super().__init__(img_size)

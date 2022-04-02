@@ -15,6 +15,7 @@ __all__ = [
     "adjust_box_anns",
     "xyxy2xywh",
     "xyxy2cxcywh",
+    "xyxy2cxcywhab"
 ]
 
 
@@ -133,3 +134,18 @@ def xyxy2cxcywh(bboxes):
     bboxes[:, 0] = bboxes[:, 0] + bboxes[:, 2] * 0.5
     bboxes[:, 1] = bboxes[:, 1] + bboxes[:, 3] * 0.5
     return bboxes
+
+def xyxy2cxcywhab(bboxes):
+    boxes_num = bboxes.shape[0]
+    xs, ys = bboxes[:, 0::2], bboxes[:, 1::2]
+    x_min, x_max = xs.min(axis=1), xs.max(axis=1)
+    y_min, y_max = ys.min(axis=1), ys.max(axis=1)
+    cx, cy = (x_min + x_max) * 0.5, (y_min + y_max) * 0.5
+    w, h = (x_max - x_min), (y_max - y_min)
+    x_min_index, x_max_index = np.argmin(xs, axis=1), np.argmax(xs, axis=1)
+    y_min_index, y_max_index = np.argmin(ys, axis=1), np.argmax(ys, axis=1)
+    alpha = xs[np.arange(boxes_num),y_min_index] - x_min
+    beta  = y_max - ys[np.arange(boxes_num),x_max_index]
+    results = np.concatenate([cx, cy, w, h, alpha, beta],axis=1)
+    return results
+
