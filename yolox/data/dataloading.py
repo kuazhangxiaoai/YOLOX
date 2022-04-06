@@ -77,7 +77,7 @@ class DataLoader(torchDataLoader):
                 sampler,
                 self.batch_size,
                 self.drop_last,
-                input_dimension=self.dataset.input_dim,
+                #input_dimension=self.dataset.input_dim,
             )
             # batch_sampler = IterationBasedBatchSampler(batch_sampler, num_iterations =
 

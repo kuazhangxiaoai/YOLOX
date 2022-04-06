@@ -10,6 +10,7 @@ import torch.distributed as dist
 import torch.nn as nn
 
 from .base_exp import BaseExp
+from torch.utils.data import distributed
 
 class Exp(BaseExp):
     def __init__(self):
@@ -36,7 +37,7 @@ class Exp(BaseExp):
         # You can uncomment this line to specify a multiscale range
         # self.random_size = (14, 26)
         # dir of dataset images, if data_dir is None, this project will use `datasets` dir
-        self.data_dir = "/home/yanggang/PyCharmWorkspace/YOLOX/datasets/coco128"
+        self.data_dir = "/home/yanggang/data/DOTA_SPLIT"
         # name of annotation file for training
         self.train_ann = "instances_train2017.json"
         # name of annotation file for evaluation
@@ -132,11 +133,10 @@ class Exp(BaseExp):
         from yolox.data import (
             DOTADataset,
             OrientedTrainTransform,
-            YoloBatchSampler,
             DataLoader,
-            InfiniteSampler,
             MosaicOrientedDetection,
             worker_init_reset_seed,
+            InfiniteSampler,
             collate_fn
         )
         from yolox.utils import (
@@ -180,6 +180,7 @@ class Exp(BaseExp):
         if is_distributed:
             batch_size = batch_size // dist.get_world_size()
 
+        sampler = None if not is_distributed else distributed.DistributedSampler(dataset=dataset, shuffle=True)
         dataloader_kwargs = {"num_workers": self.data_num_workers, "pin_memory": False}
 
         # Make sure each process has different random seed, especially for 'fork' method.
@@ -188,6 +189,8 @@ class Exp(BaseExp):
         dataloader_kwargs["batch_size"] = batch_size
         dataloader_kwargs["drop_last"] = True
         dataloader_kwargs["collate_fn"] = collate_fn
+        dataloader_kwargs["shuffle"] = True
+        dataloader_kwargs["sampler"] = sampler
         train_loader = DataLoader(self.dataset, **dataloader_kwargs)
 
         return train_loader

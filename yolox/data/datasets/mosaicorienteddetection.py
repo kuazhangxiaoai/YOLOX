@@ -10,7 +10,7 @@ import numpy as np
 from yolox.utils import adjust_box_anns, get_local_rank
 from yolox.data.data_augment import random_affine,random_cutout
 from yolox.data.datasets.datasets_wrapper import Dataset
-from dota import DOTADataset,collate_fn,draw,drawOneImg
+from yolox.data.datasets.dota import DOTADataset,collate_fn,draw,drawOneImg
 #from ..data_augment import random_affine
 #from .datasets_wrapper import Dataset
 
