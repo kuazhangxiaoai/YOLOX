@@ -11,14 +11,13 @@ import torch.nn as nn
 
 from .base_exp import BaseExp
 
-
 class Exp(BaseExp):
     def __init__(self):
         super().__init__()
 
         # ---------------- model config ---------------- #
         # detect classes number of model
-        self.num_classes = 80
+        self.num_classes = 16
         # factor of model depth
         self.depth = 1.00
         # factor of model width
@@ -29,8 +28,8 @@ class Exp(BaseExp):
         # ---------------- dataloader config ---------------- #
         # set worker to 4 for shorter dataloader init time
         # If your training process cost many memory, reduce this value.
-        self.data_num_workers = 4
-        self.input_size = (640, 640)  # (height, width)
+        self.data_num_workers = 0
+        self.input_size = (1024, 1024)  # (height, width)
         # Actual multiscale ranges: [640 - 5 * 32, 640 + 5 * 32].
         # To disable multiscale training, set the value to 0.
         self.multiscale_range = 5
@@ -100,7 +99,7 @@ class Exp(BaseExp):
 
         # -----------------  testing config ------------------ #
         # output image size during evaluation/test
-        self.test_size = (640, 640)
+        self.test_size = (1024, 1024)
         # confidence threshold during evaluation/test,
         # boxes whose scores are less than test_conf will be filtered
         self.test_conf = 0.01
@@ -131,13 +130,14 @@ class Exp(BaseExp):
         self, batch_size, is_distributed, no_aug=False, cache_img=False
     ):
         from yolox.data import (
-            COCODataset,
-            TrainTransform,
+            DOTADataset,
+            OrientedTrainTransform,
             YoloBatchSampler,
             DataLoader,
             InfiniteSampler,
-            MosaicDetection,
+            MosaicOrientedDetection,
             worker_init_reset_seed,
+            collate_fn
         )
         from yolox.utils import (
             wait_for_the_master,
@@ -147,25 +147,24 @@ class Exp(BaseExp):
         local_rank = get_local_rank()
 
         with wait_for_the_master(local_rank):
-            dataset = COCODataset(
+            dataset = DOTADataset(
+                name='train',
                 data_dir=self.data_dir,
-                json_file=self.train_ann,
                 img_size=self.input_size,
-                preproc=TrainTransform(
-                    max_labels=1e6,
+                preproc= OrientedTrainTransform(
                     flip_prob=self.flip_prob,
-                    hsv_prob=self.hsv_prob),
-                cache=cache_img,
+                    hsv_prob=self.hsv_prob
+                )
             )
 
-        dataset = MosaicDetection(
-            dataset,
-            mosaic=not no_aug,
+        dataset = MosaicOrientedDetection(
+            dataset=dataset,
             img_size=self.input_size,
-            preproc=TrainTransform(
-                max_labels=120,
+            mosaic=True,
+            preproc=OrientedTrainTransform(
                 flip_prob=self.flip_prob,
-                hsv_prob=self.hsv_prob),
+                hsv_prob=self.hsv_prob
+            ),
             degrees=self.degrees,
             translate=self.translate,
             mosaic_scale=self.mosaic_scale,
@@ -181,22 +180,14 @@ class Exp(BaseExp):
         if is_distributed:
             batch_size = batch_size // dist.get_world_size()
 
-        sampler = InfiniteSampler(len(self.dataset), seed=self.seed if self.seed else 0)
-
-        batch_sampler = YoloBatchSampler(
-            sampler=sampler,
-            batch_size=batch_size,
-            drop_last=False,
-            mosaic=not no_aug,
-        )
-
-        dataloader_kwargs = {"num_workers": self.data_num_workers, "pin_memory": True}
-        dataloader_kwargs["batch_sampler"] = batch_sampler
+        dataloader_kwargs = {"num_workers": self.data_num_workers, "pin_memory": False}
 
         # Make sure each process has different random seed, especially for 'fork' method.
         # Check https://github.com/pytorch/pytorch/issues/63311 for more details.
         dataloader_kwargs["worker_init_fn"] = worker_init_reset_seed
-
+        dataloader_kwargs["batch_size"] = batch_size
+        dataloader_kwargs["drop_last"] = True
+        dataloader_kwargs["collate_fn"] = collate_fn
         train_loader = DataLoader(self.dataset, **dataloader_kwargs)
 
         return train_loader

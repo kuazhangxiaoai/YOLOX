@@ -16,7 +16,24 @@ import cv2
 import numpy as np
 
 from yolox.utils import xyxy2cxcywh, xyxy2cxcywhab
+#from yolox.data.datasets.dota import draw
 
+def draw(img, label, savepath=False, windowName='image'):
+    for i, poly in enumerate(label):
+        poly = np.float32(poly.reshape(4, 2))
+        rect = cv2.minAreaRect(poly)
+        label[i] = cv2.boxPoints(rect).reshape(-1)
+    pts = label
+    for i, poly in enumerate(pts):
+        poly = poly.reshape([4, 2]).astype(np.int32)
+        cv2.polylines(img, [poly], isClosed=True, color=(0, 0, 255), thickness=2)
+
+    if savepath:
+        cv2.imwrite(savepath, img)
+    else:
+        cv2.namedWindow(windowName,  0)
+        cv2.imshow(windowName, img)
+        cv2.waitKey()
 
 def augment_hsv(img, hgain=5, sgain=30, vgain=30):
     hsv_augs = np.random.uniform(-1, 1, 3) * [hgain, sgain, vgain]  # random gains
@@ -276,6 +293,7 @@ class OrientedTrainTransform:
         height, width, _ = image.shape
 
         # bbox_o: [xyxy] to [c_x, c_y, w, h, alpha, beta]
+        #draw(image, boxes)
         boxes = xyxy2cxcywhab(boxes)
 
         mask_b = np.minimum(boxes[:, 2], boxes[:, 3]) > 1

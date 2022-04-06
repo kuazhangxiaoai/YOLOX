@@ -190,14 +190,14 @@ class MosaicOrientedDetection(Dataset):
             cp_labels[:, 2:-1:2] = scale[0] * cp_labels[:, 2:-1:2]
             cp_labels[:, 1:-1:2] += int(padw)
             cp_labels[:, 2:-1:2] += int(padh)
-            drawOneImg(cp_img, cp_labels)
+            #drawOneImg(cp_img, cp_labels)
         width, height = cp_img.shape[0], cp_img.shape[1]
 
         if HFLIP: #horizontal flip
-            cp_img = cp_img[:, ::-1, :]
+            cp_img = cp_img[:, ::-1, :].copy()
             cp_labels[:, 1:-1:2] = width - cp_labels[:, 1:-1:2]
         if VFLIP: #vertical flip
-            cp_img = cp_img[::-1, :, :]
+            cp_img = cp_img[::-1, :, :].copy()
             cp_labels[:, 2:-1:2] = height - cp_labels[:, 2:-1:2]
 
         img = (origin_img * r + (1 - r) * cp_img).astype(np.uint8)

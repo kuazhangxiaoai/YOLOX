@@ -6,6 +6,7 @@ import numpy as np
 
 import torch
 import torchvision
+import cv2
 
 __all__ = [
     "filter_box",
@@ -136,6 +137,10 @@ def xyxy2cxcywh(bboxes):
     return bboxes
 
 def xyxy2cxcywhab(bboxes):
+    for i, poly in enumerate(bboxes):
+        poly = np.float32(poly.reshape(4,2))
+        rect = cv2.minAreaRect(poly)
+        bboxes[i] = cv2.boxPoints(rect).reshape(-1)
     boxes_num = bboxes.shape[0]
     xs, ys = bboxes[:, 0::2], bboxes[:, 1::2]
     x_min, x_max = xs.min(axis=1), xs.max(axis=1)

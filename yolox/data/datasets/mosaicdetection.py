@@ -9,8 +9,8 @@ import numpy as np
 
 from yolox.utils import adjust_box_anns, get_local_rank
 
-from ..data_augment import random_affine
-from .datasets_wrapper import Dataset
+from yolox.data.data_augment import random_affine
+from yolox.data.datasets.datasets_wrapper import Dataset
 
 
 def get_mosaic_coordinate(mosaic_image, mosaic_index, xc, yc, w, h, input_h, input_w):

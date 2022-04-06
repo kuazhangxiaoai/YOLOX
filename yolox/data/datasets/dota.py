@@ -39,31 +39,17 @@ def collate_fn(batch):
         l[:, 0] = i
     return np.array(img), np.vstack(label), np.vstack(img_info), img_id
 
-def draw(img, label, img1, label1, img2, label2, savepath=False, windowName='image'):
+def draw(img, label, savepath=False, windowName='image'):
     pts = label[:, 1: -1]
     for i, poly in enumerate(pts):
         poly = poly.reshape([4, 2]).astype(np.int32)
         cv2.polylines(img, [poly], isClosed=True, color=(0, 0, 255), thickness=2)
 
-    pts1 = label1[:, 1: -1]
-    for i, poly in enumerate(pts1):
-        poly = poly.reshape([4, 2]).astype(np.int32)
-        cv2.polylines(img1, [poly], isClosed=True, color=(0, 0, 255), thickness=2)
-
-    pts2 = label2[:, 1: -1]
-    for i, poly in enumerate(pts2):
-        poly = poly.reshape([4, 2]).astype(np.int32)
-        cv2.polylines(img2, [poly], isClosed=True, color=(0, 0, 255), thickness=2)
-
     if savepath:
         cv2.imwrite(savepath, img)
     else:
-        cv2.namedWindow("img",  0)
-        cv2.namedWindow("img1", 0)
-        cv2.namedWindow("img2", 0)
-        cv2.imshow("img", img)
-        cv2.imshow("img1", img1)
-        cv2.imshow("img2", img2)
+        cv2.namedWindow(windowName,  0)
+        cv2.imshow(windowName, img)
         cv2.waitKey()
 
 def drawOneImg(img, label, savepath=False, windowName='image'):
