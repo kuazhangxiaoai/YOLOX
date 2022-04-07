@@ -37,7 +37,7 @@ def collate_fn(batch):
 
     for i, l in enumerate(label):
         l[:, 0] = i
-    return np.array(img), np.vstack(label), np.vstack(img_info), img_id
+    return torch.from_numpy(np.array(img)), torch.from_numpy(np.vstack(label)), np.vstack(img_info), img_id
 
 def draw(img, label, savepath=False, windowName='image'):
     pts = label[:, 1: -1]
