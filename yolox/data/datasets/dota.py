@@ -18,6 +18,7 @@ import hashlib
 #from .datasets_wrapper import Dataset
 from yolox.data.datasets.datasets_wrapper import Dataset
 from DOTA_devkit import dota_utils
+from yolox.data.data_augment import OrientedValTransform, OrientedTrainTransform
 from pathlib import Path
 from tqdm import tqdm
 
@@ -137,8 +138,9 @@ class DOTADataset(Dataset):
 
     def __getitem__(self, index):
         img, target, img_info, img_id = self.pull_item(index)
+        save_path = f"/home/yanggang/exprimentsForDataRead/{index}_draw.png"
         if self.preproc is not None:
-            img, target, img_info, img_id = self.preproc(img, target, self.input_dim)
+            img, target = self.preproc(img, target, self.input_dim, savepath=save_path)
         return img, target, img_info, img_id
 
     def letterbox(self, img, new_shape=(1024,1024), color=(114,114,114),auto=False, scaleFill=False, scale_up=True, stride=32):
@@ -168,15 +170,9 @@ class DOTADataset(Dataset):
 
         im = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)
         return im, radio, (dw, dh)
-"""
-    
-
-
-
 
 if __name__ == '__main__':
-    dataset = DOTADataset(name='train', data_dir='/home/yanggang/data/DOTA_SPLIT')
+    dataset = DOTADataset(name='train', data_dir='/home/yanggang/data/DOTA_SPLIT', preproc=OrientedTrainTransform())
     dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=4, shuffle=False,collate_fn=collate_fn)
     for i, (img, target, img_info, img_id) in enumerate(dataloader):
-        print("reading one batch")
-"""
+        print(f"reading {i} batch, {img.shape}")

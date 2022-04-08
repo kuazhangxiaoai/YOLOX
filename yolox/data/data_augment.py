@@ -35,6 +35,34 @@ def draw(img, label, savepath=False, windowName='image'):
         cv2.imshow(windowName, img)
         cv2.waitKey()
 
+def letterbox(img, new_shape=(1024,1024), color=(114,114,114),auto=False, scaleFill=False, scale_up=True, stride=32):
+    shape = img.shape[:2]
+    if isinstance(new_shape, int):
+        new_shape = (new_shape, new_shape)
+    r = min(new_shape[0] / shape[0], new_shape[1] /  shape[1])
+    if not scale_up:
+        r = min(r, 1.0)
+    radio = r, r
+    new_unpad = int(round(shape[1] * r)), int(round(shape[0] * r))
+    dw, dh = new_shape[1] - new_unpad[0], new_shape[0] - new_unpad[1]
+
+    if auto:
+        dh, dw = np.mod(dh, stride), np.mod(dw, stride)
+    elif scaleFill:
+        dh, dw = 0.0, 0.0
+        new_unpad = (new_shape[1], new_shape[0])
+        radio = new_shape[1]/shape[1], new_shape[0]/shape[0]
+
+    dw /= 2
+    dh /= 2
+    if shape[::-1] != new_unpad:
+        img = cv2.resize(img, new_unpad, interpolation=cv2.INTER_LINEAR)
+    top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
+    left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
+
+    im = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)
+    return im, radio, (dw, dh)
+
 def augment_hsv(img, hgain=5, sgain=30, vgain=30):
     hsv_augs = np.random.uniform(-1, 1, 3) * [hgain, sgain, vgain]  # random gains
     hsv_augs *= np.random.randint(0, 2, 3)  # random selection of h, s, v
@@ -280,9 +308,17 @@ class OrientedTrainTransform:
         self.flip_prob = flip_prob
         self.hsv_prob = hsv_prob
 
-    def __call__(self, image, targets, input_dim):
+    def __call__(self, image, targets, input_dim, savepath=None):
         boxes = targets[:, 1:-1].copy()
         labels = targets[:, -1].copy()
+
+        if not ((image.shape[0] == input_dim[0]) and (image.shape[1] == input_dim[1])):
+            image, scale, (dw, dh) = letterbox(image, input_dim)
+            boxes = boxes.astype(np.float64)
+            boxes *= scale[0]
+            boxes[:, ::2] += dw
+            boxes[:, 1::2] += dh
+
         image, boxes = _mirror(image, boxes)
 
         image_o = image.copy()
@@ -291,10 +327,11 @@ class OrientedTrainTransform:
         if random.random() < self.hsv_prob:
             image = augment_hsv(image)
         height, width, _ = image.shape
-
+        draw(image, boxes, savepath=savepath)
         # bbox_o: [xyxy] to [c_x, c_y, w, h, alpha, beta]
         #draw(image, boxes)
         boxes = xyxy2cxcywhab(boxes)
+
 
         mask_b = np.minimum(boxes[:, 2], boxes[:, 3]) > 1
         boxes_t = boxes[mask_b]
@@ -302,7 +339,7 @@ class OrientedTrainTransform:
         labels_t = np.expand_dims(labels_t, 1)
 
         targets_t = np.hstack((boxes_t, labels_t))
-
+        image = image.transpose((2, 0, 1))  # from channel-last to channel-first
         return image, targets_t
 
 class ValTransform:
@@ -361,10 +398,19 @@ class OrientedValTransform:
 
     # assume input is cv2 img for now
     def __call__(self, img, res, input_size):
-        img, _ = preproc(img, input_size, self.swap)
+        img, scale, (dw, dh) = letterbox(img, new_shape=input_size)
+        assert scale[0] == scale[1]
+        boxes, classes = res[:, 1:-1], res[:, -1]
+        boxes = boxes.astype(np.float64)
+        boxes *= scale[0]
+        boxes[:, ::2] += dw
+        boxes[:, 1::2] += dh
+        res[:, 1:-1] = boxes
+        res[:, -1] = classes
+        img = img.transpose((2,0,1)) #from channel-last to channel-first
         if self.legacy:
             img = img[::-1, :, :].copy()
             img /= 255.0
             img -= np.array([0.485, 0.456, 0.406]).reshape(3, 1, 1)
             img /= np.array([0.229, 0.224, 0.225]).reshape(3, 1, 1)
-        return img, np.zeros((1, 5))
+        return img, res

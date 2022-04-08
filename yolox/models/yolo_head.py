@@ -106,7 +106,7 @@ class YOLOXHead(nn.Module):
             self.reg_preds.append(
                 nn.Conv2d(
                     in_channels=int(256 * width),
-                    out_channels=4,
+                    out_channels=6,
                     kernel_size=1,
                     stride=1,
                     padding=0,

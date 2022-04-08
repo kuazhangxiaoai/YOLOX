@@ -271,14 +271,14 @@ class Exp(BaseExp):
         return scheduler
 
     def get_eval_loader(self, batch_size, is_distributed, testdev=False, legacy=False):
-        from yolox.data import COCODataset, ValTransform
+        from yolox.data import DOTADataset, OrientedValTransform
 
-        valdataset = COCODataset(
+        valdataset = DOTADataset(
             data_dir=self.data_dir,
             json_file=self.val_ann if not testdev else self.test_ann,
-            name="val2014" if not testdev else "test2014",
+            name="val" if not testdev else "test",
             img_size=self.test_size,
-            preproc=ValTransform(legacy=legacy),
+            preproc=OrientedValTransform(legacy=legacy),
         )
 
         if is_distributed:
@@ -291,7 +291,7 @@ class Exp(BaseExp):
 
         dataloader_kwargs = {
             "num_workers": self.data_num_workers,
-            "pin_memory": True,
+            "pin_memory": False,
             "sampler": sampler,
         }
         dataloader_kwargs["batch_size"] = batch_size
@@ -300,10 +300,9 @@ class Exp(BaseExp):
         return val_loader
 
     def get_evaluator(self, batch_size, is_distributed, testdev=False, legacy=False):
-        from yolox.evaluators import COCOEvaluator
-
+        from yolox.evaluators import DOTAEvaluator
         val_loader = self.get_eval_loader(batch_size, is_distributed, testdev, legacy)
-        evaluator = COCOEvaluator(
+        evaluator = DOTAEvaluator(
             dataloader=val_loader,
             img_size=self.test_size,
             confthre=self.test_conf,
