@@ -327,7 +327,7 @@ class OrientedTrainTransform:
         if random.random() < self.hsv_prob:
             image = augment_hsv(image)
         height, width, _ = image.shape
-        draw(image, boxes, savepath=savepath)
+        #draw(image, boxes, savepath=savepath)
         # bbox_o: [xyxy] to [c_x, c_y, w, h, alpha, beta]
         #draw(image, boxes)
         boxes = xyxy2cxcywhab(boxes)
@@ -407,7 +407,7 @@ class OrientedValTransform:
         boxes[:, 1::2] += dh
         res[:, 1:-1] = boxes
         res[:, -1] = classes
-        img = img.transpose((2,0,1)) #from channel-last to channel-first
+        img = img.transpose(self.swap) #from channel-last to channel-first
         if self.legacy:
             img = img[::-1, :, :].copy()
             img /= 255.0

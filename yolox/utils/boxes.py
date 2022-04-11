@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding:utf-8 -*-
 # Copyright (c) Megvii Inc. All rights reserved.
+import time
 
 import numpy as np
 
 import torch
 import torchvision
 import cv2
+
+from yolox.utils import nms_rotated
 
 __all__ = [
     "filter_box",
@@ -18,7 +21,6 @@ __all__ = [
     "xyxy2cxcywh",
     "xyxy2cxcywhab"
 ]
-
 
 def filter_box(output, scale_range):
     """
@@ -136,20 +138,105 @@ def xyxy2cxcywh(bboxes):
     bboxes[:, 1] = bboxes[:, 1] + bboxes[:, 3] * 0.5
     return bboxes
 
+
 def xyxy2cxcywhab(bboxes):
     for i, poly in enumerate(bboxes):
         poly = np.float32(poly.reshape(4,2))
         rect = cv2.minAreaRect(poly)
         bboxes[i] = cv2.boxPoints(rect).reshape(-1)
     boxes_num = bboxes.shape[0]
+    new_boxes = np.zeros([boxes_num, 6],dtype=bboxes.dtype)
     xs, ys = bboxes[:, 0::2], bboxes[:, 1::2]
     x_min, x_max = xs.min(axis=1), xs.max(axis=1)
     y_min, y_max = ys.min(axis=1), ys.max(axis=1)
-    cx, cy = (x_min + x_max) * 0.5, (y_min + y_max) * 0.5
-    w, h = (x_max - x_min), (y_max - y_min)
+    new_boxes[:, 0], new_boxes[:, 1] = (x_min + x_max) * 0.5, (y_min + y_max) * 0.5 # get cx and cy
+    new_boxes[:, 2], new_boxes[:, 3] = (x_max - x_min), (y_max - y_min)             # get width and height
     x_min_index, x_max_index = np.argmin(xs, axis=1), np.argmax(xs, axis=1)
     y_min_index, y_max_index = np.argmin(ys, axis=1), np.argmax(ys, axis=1)
-    alpha = xs[np.arange(boxes_num),y_min_index] - x_min
-    beta  = y_max - ys[np.arange(boxes_num),x_max_index]
-    return np.transpose(np.vstack([cx, cy, w, h, alpha, beta]))
+    new_boxes[:, 4] = xs[np.arange(boxes_num),y_min_index] - x_min                  #get alpha
+    new_boxes[:, 5]  = y_max - ys[np.arange(boxes_num),x_max_index]                 # get beta
+    return new_boxes
 
+def xywhab2xyxy(bboxes, device='cuda'):
+    #bboxes (num, [cx, cy, w, h, alpha, beta]): described by format of xywhab
+    #return (num, [x1, y1, x2, y2, x3, y3, x4, y4]): described by format of xyxy
+    boxes_num = bboxes.shape[0]
+    new_boxes = torch.zeros([boxes_num, 8]).cuda()
+    new_boxes[:, 0] = bboxes[:, 0] - 0.5 * bboxes[:, 2] + bboxes[:, 4]
+    new_boxes[:, 1] = bboxes[:, 1] - 0.5 * bboxes[:, 3]
+    new_boxes[:, 2] = bboxes[:, 0] + 0.5 * bboxes[:, 2]
+    new_boxes[:, 3] = bboxes[:, 1] + 0.5 * bboxes[:, 3] - bboxes[:, 5]
+    new_boxes[:, 4] = bboxes[:, 0] + 0.5 * bboxes[:, 2] - bboxes[:, 4]
+    new_boxes[:, 5] = bboxes[:, 1] + 0.5 * bboxes[:, 3]
+    new_boxes[:, 6] = bboxes[:, 0] - 0.5 * bboxes[:, 2]
+    new_boxes[:, 7] = bboxes[:, 1] - 0.5 * bboxes[:, 3] + bboxes[:, 5]
+    return new_boxes
+
+def polyab_nms(dets, conf_thr=0.25, iou_thr=0.01, argnostic=False,classes=None, labels=(), multi_label=True, max_det=1500):
+    #dets (batch_n, anchors_n, 7+num_classes) : [cx, cy, w, h, alpha, beta, conf, num_classes]
+    nc = dets.shape[2] - 7
+    xc = dets[..., 6] > conf_thr
+    class_index = nc + 7
+    max_wh = 4096
+    max_nms = 30000
+    time_limit = 30.0
+    multi_label &= nc > 1
+
+    t = time.time()
+    output = [torch.zeros((0, 10), device=dets.device)] * predictions.shape[0]
+    for xi, x in enumerate(dets):
+        x = x[xc[xi]]
+        x[:, 7:] *= x[:, 6:7]
+        boxes = xywhab2xyxy(x[:, :6])
+
+        if labels and len(labels[xi]):
+            l = labels[xi]
+            v = torch.zeros((len(l), nc + 7), device=x.device)
+            v[:, :6] = l[:, 1:7]
+            v[:, 6] = 1.0
+            v[range(len(l)), l[: 0].long() + 7] = 1.0
+            x = torch.cat((x,v), 0)
+
+        if not x.shape[0]:
+            continue
+
+        #Detections matrix n * 10 (x1, y1, x2, y2, x3, y3, x4, y4, conf, cls)
+        if multi_label:
+            i, j = (x[:, 6:class_index] > conf_thr).nonzero(as_tuple=False).T
+            x = torch.cat((boxes[i], x[i, j+6, None], j[:, None].float()), 1)
+        else:
+            conf, j = x[:, 6:class_index].max(1, keepdim=True)
+            x = torch.cat((boxes, conf, j.float()), 1)[conf.view(-1) > conf_thr]
+
+        if classes is not None:
+            x = x[(x[:, 9:10] == torch.tensor(classes, device=x.device)).any(1)]
+
+        n = x.shape[0]
+        if not n:
+            continue
+        elif n > max_nms:
+            x = x[x[:, 8].argsort(descending=True)[:max_nms]]
+
+        c = x[:, 9:10] * (0 if argnostic else max_wh)
+        polys = x[:, :8].clone() + c
+        scores = x[:, 8].unsqueeze(dim=1)
+        dets = torch.cat([polys, scores], dim=1)
+        _, i = nms_rotated.poly_nms(dets, iou_thr=iou_thr)
+        if i.shape[0] > max_det:
+            i = i[:, max_det]
+        output[xi] = x[i]
+        if time.time() - t > time_limit:
+            print(f'WARNING: NMS time limit {time_limit}s exceeded')
+            break
+
+    return None
+
+
+if __name__ == "__main__":
+    polys = torch.Tensor(
+        [[0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0],
+         [0.1, 0.1, 0.1, 1.1, 1.1, 1.1, 1.1, 0.1]]
+    ).numpy()
+    predictions = torch.randn([4, 8500, 23]).cuda()
+    polyab_nms(dets=predictions)
+    print("ending")
