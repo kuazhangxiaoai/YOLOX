@@ -202,10 +202,10 @@ def polyab_nms(dets, conf_thr=0.25, iou_thr=0.01, argnostic=False,classes=None, 
 
         #Detections matrix n * 10 (x1, y1, x2, y2, x3, y3, x4, y4, conf, cls)
         if multi_label:
-            i, j = (x[:, 6:class_index] > conf_thr).nonzero(as_tuple=False).T
-            x = torch.cat((boxes[i], x[i, j+6, None], j[:, None].float()), 1)
+            i, j = (x[:, 7:class_index] > conf_thr).nonzero(as_tuple=False).T
+            x = torch.cat((boxes[i], x[i, j+7, None], j[:, None].float()), 1)
         else:
-            conf, j = x[:, 6:class_index].max(1, keepdim=True)
+            conf, j = x[:, 7:class_index].max(1, keepdim=True)
             x = torch.cat((boxes, conf, j.float()), 1)[conf.view(-1) > conf_thr]
 
         if classes is not None:
@@ -229,7 +229,7 @@ def polyab_nms(dets, conf_thr=0.25, iou_thr=0.01, argnostic=False,classes=None, 
             print(f'WARNING: NMS time limit {time_limit}s exceeded')
             break
 
-    return None
+    return output
 
 
 if __name__ == "__main__":
