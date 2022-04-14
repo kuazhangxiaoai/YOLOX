@@ -19,7 +19,9 @@ __all__ = [
     "adjust_box_anns",
     "xyxy2xywh",
     "xyxy2cxcywh",
-    "xyxy2cxcywhab"
+    "xywhab2xyxy",
+    "xyxy2cxcywhab",
+    "orientedpostprocess"
 ]
 
 def filter_box(output, scale_range):
@@ -172,7 +174,7 @@ def xywhab2xyxy(bboxes, device='cuda'):
     new_boxes[:, 7] = bboxes[:, 1] - 0.5 * bboxes[:, 3] + bboxes[:, 5]
     return new_boxes
 
-def polyab_nms(dets, conf_thr=0.25, iou_thr=0.01, argnostic=False,classes=None, labels=(), multi_label=True, max_det=1500):
+def orientedpostprocess(dets, conf_thr=0.25, iou_thr=0.01, argnostic=False,classes=None, labels=(), multi_label=True, max_det=1500):
     #dets (batch_n, anchors_n, 7+num_classes) : [cx, cy, w, h, alpha, beta, conf, num_classes]
     nc = dets.shape[2] - 7
     xc = dets[..., 6] > conf_thr

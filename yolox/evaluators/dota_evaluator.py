@@ -21,6 +21,7 @@ from yolox.utils import (
     gather,
     is_main_process,
     postprocess,
+    orientedpostprocess,
     synchronize,
     time_synchronized,
     xyxy2xywh,
@@ -94,7 +95,7 @@ class DOTAEvaluator:
                     infer_end = time_synchronized()
                     inference_time += infer_end - start
 
-                outputs = postprocess(
+                outputs = orientedpostprocess(
                     outputs, self.num_class, self.confthre, self.nmsthre
                 )
 
@@ -113,6 +114,8 @@ class DOTAEvaluator:
         eval_results = self.evaluate_prediction(data_list, statistics)
         synchronize()
         return eval_results
+
+
 
     def convert_to_dota_format(self, outputs, info_imgs, ids):
         for (output, img_h, img_w, img_id) in zip(outputs, info_imgs[0], info_imgs[1], ids):

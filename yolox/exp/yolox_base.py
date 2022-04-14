@@ -275,7 +275,6 @@ class Exp(BaseExp):
 
         valdataset = DOTADataset(
             data_dir=self.data_dir,
-            json_file=self.val_ann if not testdev else self.test_ann,
             name="val" if not testdev else "test",
             img_size=self.test_size,
             preproc=OrientedValTransform(legacy=legacy),
@@ -307,8 +306,8 @@ class Exp(BaseExp):
             img_size=self.test_size,
             confthre=self.test_conf,
             nmsthre=self.nmsthre,
-            num_classes=self.num_classes,
-            testdev=testdev,
+            num_class=self.num_classes,
+            test_dev=testdev,
         )
         return evaluator
 
