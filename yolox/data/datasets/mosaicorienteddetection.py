@@ -219,4 +219,6 @@ if __name__ == "__main__":
     dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=4, shuffle=False,collate_fn=collate_fn)
 
     for i, (img, label, img_info, img_id) in enumerate(dataloader):
-        print("one batch")
+        cls = label[:, -1]
+        gt_classes = torch.nn.functional.one_hot(cls.to(torch.int64), 16)
+        print(f"read the {i} batch, ")

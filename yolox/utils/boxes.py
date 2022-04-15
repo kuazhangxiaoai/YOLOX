@@ -10,7 +10,7 @@ import torchvision
 import cv2
 
 from yolox.utils import nms_rotated
-
+from yolox.utils import polyiou
 __all__ = [
     "filter_box",
     "postprocess",
@@ -83,29 +83,41 @@ def postprocess(prediction, num_classes, conf_thre=0.7, nms_thre=0.45, class_agn
 
 
 def bboxes_iou(bboxes_a, bboxes_b, xyxy=True):
-    if bboxes_a.shape[1] != 4 or bboxes_b.shape[1] != 4:
+    if bboxes_a.shape[1] != 6 or bboxes_b.shape[1] != 6:
         raise IndexError
 
     if xyxy:
         tl = torch.max(bboxes_a[:, None, :2], bboxes_b[:, :2])
-        br = torch.min(bboxes_a[:, None, 2:], bboxes_b[:, 2:])
-        area_a = torch.prod(bboxes_a[:, 2:] - bboxes_a[:, :2], 1)
-        area_b = torch.prod(bboxes_b[:, 2:] - bboxes_b[:, :2], 1)
+        br = torch.min(bboxes_a[:, None, 2:4], bboxes_b[:, 2:4])
+        area_a = torch.prod(bboxes_a[:, 2:4] - bboxes_a[:, :2], 1)
+        area_b = torch.prod(bboxes_b[:, 2:4] - bboxes_b[:, :2], 1)
     else:
         tl = torch.max(
-            (bboxes_a[:, None, :2] - bboxes_a[:, None, 2:] / 2),
-            (bboxes_b[:, :2] - bboxes_b[:, 2:] / 2),
+            (bboxes_a[:, None, :2] - bboxes_a[:, None, 2:4] / 2),
+            (bboxes_b[:, :2] - bboxes_b[:, 2:4] / 2),
         )
         br = torch.min(
-            (bboxes_a[:, None, :2] + bboxes_a[:, None, 2:] / 2),
-            (bboxes_b[:, :2] + bboxes_b[:, 2:] / 2),
+            (bboxes_a[:, None, :2] + bboxes_a[:, None, 2:4] / 2),
+            (bboxes_b[:, :2] + bboxes_b[:, 2:4] / 2),
         )
 
-        area_a = torch.prod(bboxes_a[:, 2:], 1)
-        area_b = torch.prod(bboxes_b[:, 2:], 1)
+        area_a = torch.prod(bboxes_a[:, 2:4], 1)
+        area_b = torch.prod(bboxes_b[:, 2:4], 1)
     en = (tl < br).type(tl.type()).prod(dim=2)
     area_i = torch.prod(br - tl, 2) * en  # * ((tl < br).all())
     return area_i / (area_a[:, None] + area_b - area_i)
+
+def rbox_iou(boxes_a, boxes_b, mode='xywhab'):
+    length_a, length_b = boxes_a.shape[0], boxes_b.shape[0]
+    overlaps = torch.zeros([length_a, length_b], device=boxes_a.device)
+    if mode == 'xywhab':
+        boxes_a = xywhab2xyxy(boxes_a, device=boxes_a.device)
+        boxes_b = xywhab2xyxy(boxes_b, device=boxes_b.device)
+    for i in range(length_a):
+        for j in range(length_b):
+            overlaps[i, j] = polyiou.iou_poly(polyiou.VectorDouble(boxes_a[i]), polyiou.VectorDouble(boxes_b[j]))
+
+    return overlaps
 
 
 def matrix_iou(a, b):

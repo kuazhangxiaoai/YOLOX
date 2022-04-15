@@ -309,7 +309,8 @@ class OrientedTrainTransform:
         self.hsv_prob = hsv_prob
 
     def __call__(self, image, targets, input_dim, savepath=None):
-        boxes = targets[:, 1:-1].copy()
+        batchs = targets[:, 0:1].copy()
+        boxes  = targets[:, 1:-1].copy()
         labels = targets[:, -1].copy()
 
         if not ((image.shape[0] == input_dim[0]) and (image.shape[1] == input_dim[1])):
@@ -334,11 +335,12 @@ class OrientedTrainTransform:
 
 
         mask_b = np.minimum(boxes[:, 2], boxes[:, 3]) > 1
+        batchs_t = batchs[mask_b]
         boxes_t = boxes[mask_b]
         labels_t = labels[mask_b]
         labels_t = np.expand_dims(labels_t, 1)
 
-        targets_t = np.hstack((boxes_t, labels_t))
+        targets_t = np.hstack((batchs_t, boxes_t, labels_t))
         image = image.transpose((2, 0, 1))  # from channel-last to channel-first
         return image, targets_t
 

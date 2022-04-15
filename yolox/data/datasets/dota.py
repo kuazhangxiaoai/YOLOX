@@ -7,7 +7,7 @@ import random
 
 import torch.utils.data
 from loguru import logger
-
+import torch
 import cv2
 import numpy as np
 import json
@@ -175,4 +175,6 @@ if __name__ == '__main__':
     dataset = DOTADataset(name='train', data_dir='/home/yanggang/data/DOTA_SPLIT', preproc=OrientedTrainTransform())
     dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=4, shuffle=False,collate_fn=collate_fn)
     for i, (img, target, img_info, img_id) in enumerate(dataloader):
+        labels = target[:, -1]
+        gt_classes = torch.nn.functional.one_hot(labels.to(torch.int64), 16)
         print(f"reading {i} batch, {img.shape}")
